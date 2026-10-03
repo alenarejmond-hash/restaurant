@@ -8,5 +8,5 @@ export default defineConfig({
   // 🚀 НАСТРОЙКА ПУТИ ДЛЯ APPSEAPRO.COM:
   // 1. Если это подпроект (например, сайт должен открываться по адресу appseapro.com/test/) — пишем '/test/'
   // 2. Если это самый ГЛАВНЫЙ репозиторий (который открывается прямо по адресу appseapro.com) — пишем '/'
-  base: '/restaurant/', 
+  base: './', 
 })
