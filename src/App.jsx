@@ -42,7 +42,10 @@ const translations = {
     guestPhone: "Հեռախոս (կամընտիր):",
     payOnReceipt: "Պատվերի ընդհանուր գումարը՝",
     backToMenu: "Վերադառնալ մենյու",
-    loading: "Բեռնվում է մենյուն..."
+    loading: "Բեռնվում է մենյուն...",
+    ingredients: "Բաղադրությունը",
+    commentPlaceholder: "Հատուկ ցանկություններ (օրինակ՝ առանց սոխի)...",
+    pleaseWait: "Խնդրում ենք սպասել 1 րոպե նախքան կրկին փորձելը"
   },
   ru: {
     bistroTitle: "Arev & Lusin",
@@ -81,7 +84,10 @@ const translations = {
     guestPhone: "Телефон (по желанию):",
     payOnReceipt: "Сумма заказа:",
     backToMenu: "Вернуться в меню",
-    loading: "Загружаем меню..."
+    loading: "Загружаем меню...",
+    ingredients: "Состав",
+    commentPlaceholder: "Особые пожелания (например, без лука)...",
+    pleaseWait: "Подождите 1 минуту перед повторным действием"
   },
   en: {
     bistroTitle: "Arev & Lusin",
@@ -120,7 +126,10 @@ const translations = {
     guestPhone: "Phone (optional):",
     payOnReceipt: "Order total:",
     backToMenu: "Back to Menu",
-    loading: "Loading menu..."
+    loading: "Loading menu...",
+    ingredients: "Ingredients",
+    commentPlaceholder: "Special requests (e.g., no onion)...",
+    pleaseWait: "Please wait 1 minute before trying again"
   }
 };
 
@@ -133,6 +142,11 @@ const DEFAULT_MENU_ITEMS = [
       am: 'Ավանդական հորթի միս հարած կարագով և կոնյակի բույրով:',
       ru: 'Аутентичная отбивная телятина со взбитым сливочным маслом и коньячным ароматом.',
       en: 'Authentic beaten veal with whipped butter and a hint of cognac.'
+    },
+    ingredients: {
+      am: 'Հորթի միս, կարագ, կոնյակ, համեմունքներ',
+      ru: 'Телятина, сливочное масло, коньяк, специи',
+      en: 'Veal, butter, cognac, spices'
     },
     price: 4800,
     image: 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=800&q=80',
@@ -218,6 +232,14 @@ export default function App() {
   };
 
   const handleCallWaiter = async () => {
+    const now = Date.now();
+    const lastCall = parseInt(localStorage.getItem('ech_last_waiter') || '0', 10);
+    if (now - lastCall < 60000) {
+      showToast(tLang.pleaseWait);
+      return;
+    }
+    localStorage.setItem('ech_last_waiter', now.toString());
+
     triggerHaptic('medium');
     showToast(tLang.waiterCalled);
     try {
@@ -230,6 +252,15 @@ export default function App() {
   };
 
   const handleRequestBill = async (method) => {
+    const now = Date.now();
+    const lastCall = parseInt(localStorage.getItem('ech_last_bill') || '0', 10);
+    if (now - lastCall < 60000) {
+      showToast(tLang.pleaseWait);
+      setShowBillModal(false);
+      return;
+    }
+    localStorage.setItem('ech_last_bill', now.toString());
+
     triggerHaptic('medium');
     showToast(`${tLang.billRequested} (${method === 'cash' ? tLang.cash : tLang.card})`);
     setShowBillModal(false);
@@ -280,10 +311,17 @@ export default function App() {
         
         if (parsed.length > 1) {
           const headers = parsed[0].map(h => h ? h.trim().toLowerCase() : '');
-          const getIdx = (name) => headers.findIndex(h => h === name.toLowerCase());
+          
+          const getIdx = (...names) => {
+            for (let name of names) {
+              const idx = headers.findIndex(h => h === name.toLowerCase());
+              if (idx !== -1) return idx;
+            }
+            return -1;
+          };
           
           const clean = (val) => {
-            if (!val) return '';
+            if (val === undefined || val === null) return '';
             const str = String(val).trim();
             if (str.includes('#VALUE!') || str.includes('#N/A') || str.includes('#REF!') || str.includes('#ERROR!')) return '';
             return str;
@@ -294,15 +332,15 @@ export default function App() {
             const row = parsed[i];
             if (!row) continue; 
             
-            const nameAm = clean(row[getIdx('название_am')]);
-            const nameRu = clean(row[getIdx('название_ru')]);
-            const nameEn = clean(row[getIdx('название_en')]);
+            const nameAm = clean(row[getIdx('название_am', 'название am')]);
+            const nameRu = clean(row[getIdx('название_ru', 'название ru', 'название')]);
+            const nameEn = clean(row[getIdx('название_en', 'название en', 'name')]);
             
             if (!nameAm && !nameRu && !nameEn) continue; 
             
-            const catAm = clean(row[getIdx('категория_am')]) || 'Այլ';
-            const catRu = clean(row[getIdx('категория_ru')]) || 'Разное';
-            const catEn = clean(row[getIdx('категория_en')]) || 'Other';
+            const catAm = clean(row[getIdx('категория_am', 'категория am')]) || 'Այլ';
+            const catRu = clean(row[getIdx('категория_ru', 'категория ru', 'категория')]) || 'Разное';
+            const catEn = clean(row[getIdx('категория_en', 'категория en', 'category')]) || 'Other';
             
             const availableStr = clean(row[getIdx('наличие')]) || 'TRUE';
             const isAvailable = availableStr.toUpperCase() !== 'FALSE' && availableStr.toUpperCase() !== 'ЛОЖЬ';
@@ -314,12 +352,21 @@ export default function App() {
               id: clean(row[getIdx('id')]) || `item-${i}`,
               category: { am: catAm, ru: catRu, en: catEn },
               name: { am: nameAm, ru: nameRu, en: nameEn },
-              description: { am: clean(row[getIdx('описание_am')]), ru: clean(row[getIdx('описание_ru')]), en: clean(row[getIdx('описание_en')]) },
+              description: { 
+                am: clean(row[getIdx('описание_am', 'описание am', 'նկարագրություն')]), 
+                ru: clean(row[getIdx('описание_ru', 'описание ru', 'описание')]), 
+                en: clean(row[getIdx('описание_en', 'описание en', 'description')]) 
+              },
+              ingredients: { 
+                am: clean(row[getIdx('состав_am', 'состав am', 'բաղադրություն', 'состав', 'ингредиенты', 'ingredients', 'состав ru', 'состав_ru')]), 
+                ru: clean(row[getIdx('состав_ru', 'состав ru', 'состав', 'ингредиенты', 'ingredients')]), 
+                en: clean(row[getIdx('состав_en', 'состав en', 'ingredients', 'состав')]) 
+              },
               price: parseInt(clean(row[getIdx('цена')]).replace(/\D/g, '')) || 0,
-              image: formatImageUrl(clean(row[getIdx('фото_url')])),
+              image: formatImageUrl(clean(row[getIdx('фото_url', 'фото url', 'фото')])),
               available: isAvailable,
               tags: tags,
-              prepTime: clean(row[getIdx('время_готовки')]),
+              prepTime: clean(row[getIdx('время_готовки', 'время готовки')]),
               calories: clean(row[getIdx('калории')]),
               weight: clean(row[getIdx('порция')])
             });
@@ -478,6 +525,14 @@ export default function App() {
     });
   };
 
+  const updateItemComment = (dishId, comment) => {
+    setCart(prev => {
+      const current = prev[dishId];
+      if (!current) return prev;
+      return { ...prev, [dishId]: { ...current, comment } };
+    });
+  };
+
   const clearCart = () => {
     triggerHaptic('heavy');
     setCart({});
@@ -513,7 +568,8 @@ export default function App() {
           items: cartList.map(item => ({
             name: { AM: item.name.am, RU: item.name.ru, EN: item.name.en },
             quantity: item.quantity,
-            price: item.price
+            price: item.price,
+            comment: item.comment || ''
           })),
           total: cartSubtotal
         })
@@ -575,13 +631,13 @@ export default function App() {
         </div>
       )}
 
-      {}
+      {/* Header */}
       <header className="sticky top-0 z-40 backdrop-blur-xl bg-[#141311]/85 border-b border-white/5 shadow-md">
         <div className="max-w-5xl mx-auto px-3 sm:px-4 py-2 sm:py-3 flex items-center justify-between gap-2">
           
           <div className="flex items-center space-x-2 sm:space-x-3 min-w-0 flex-1">
             <div className="w-8 h-8 sm:w-10 sm:h-10 shrink-0 flex items-center justify-center overflow-hidden">
-              <img src="/logo.png" alt="Logo" className="w-full h-full object-contain" />
+              <img src="./logo.png" alt="Logo" className="w-full h-full object-contain" />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-1 sm:gap-1.5">
@@ -593,7 +649,7 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex flex-col items-end gap-2 sm:gap-1.5 shrink-0">
+          <div className="flex flex-col items-end gap-1.5 shrink-0">
             <div className="flex bg-white/5 rounded-full p-1 border border-white/10 shrink-0 shadow-inner">
               {['am', 'ru', 'en'].map(l => (
                 <button
@@ -606,22 +662,20 @@ export default function App() {
             </div>
             <button
               onClick={() => setShowTablePicker(true)}
-              className="group flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 rounded-lg bg-white/5 border border-[#D4AF37]/30 hover:border-[#D4AF37]/80 text-[#D4AF37] transition-all hover:scale-105 active:scale-95 shrink-0 whitespace-nowrap"
+              className="group flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full bg-white/5 border border-white/10 hover:border-[#D4AF37]/50 hover:bg-white/10 transition-all hover:scale-105 active:scale-95 shrink-0 shadow-inner"
             >
-              <span className="relative flex h-1.5 w-1.5 shrink-0"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#D4AF37] opacity-75"></span><span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#B5952F]"></span></span>
-              <span className="text-[9px] sm:text-[10px] font-semibold text-stone-300">{tLang.table}:</span>
-              <span className="text-[9px] sm:text-[10px] font-bold text-[#D4AF37]">#{tableNumber}</span>
-              <ChevronDown className="w-3 h-3 text-stone-400 group-hover:text-[#D4AF37] transition-transform shrink-0" />
+              <span className="relative flex h-1.5 w-1.5 sm:h-2 sm:w-2 shrink-0"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#D4AF37] opacity-75"></span><span className="relative inline-flex rounded-full h-1.5 w-1.5 sm:h-2 sm:w-2 bg-[#B5952F]"></span></span>
+              <span className="text-[9px] sm:text-[10px] font-bold text-stone-300">{tLang.table}: <span className="text-[#D4AF37] font-black">#{tableNumber}</span></span>
+              <ChevronDown className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-stone-400 group-hover:text-[#D4AF37] transition-transform shrink-0" />
             </button>
           </div>
 
         </div>
       </header>
 
-      {}
+      {/* Hero Banner */}
       <div className="max-w-5xl mx-auto px-3 sm:px-4 pt-3 sm:pt-4 pb-2">
-        <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-r from-[#1A1816] via-[#24211D] to-[#1A1816] border border-white/5 p-4 sm:p-5 shadow-2xl backdrop-blur-md">
-          <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-radial from-[#D4AF37]/10 to-transparent pointer-events-none" />
+        <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-[#1A1816] border border-white/5 p-4 sm:p-5 shadow-2xl backdrop-blur-md">
           <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
             <div className="min-w-0 w-full">
               <div className="flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs font-medium text-[#D4AF37] mb-1.5 whitespace-nowrap overflow-hidden">
@@ -642,7 +696,16 @@ export default function App() {
             </div>
             <span className="relative z-10 text-[11px] sm:text-xs font-bold text-stone-300 group-hover:text-white transition-colors truncate tracking-wide">{tLang.callWaiter}</span>
           </button>
-          <button onClick={() => setShowBillModal(true)} className="group relative flex items-center justify-center gap-2 sm:gap-3 py-3 sm:py-4 px-2 rounded-2xl bg-gradient-to-br from-[#1A1816]/80 to-[#141311]/90 backdrop-blur-md border border-white/10 hover:border-[#D4AF37]/40 transition-all active:scale-[0.98] shadow-lg overflow-hidden">
+          
+          <button onClick={() => {
+            const now = Date.now();
+            const lastCall = parseInt(localStorage.getItem('ech_last_bill') || '0', 10);
+            if (now - lastCall < 60000) {
+              showToast(tLang.pleaseWait);
+            } else {
+              setShowBillModal(true);
+            }
+          }} className="group relative flex items-center justify-center gap-2 sm:gap-3 py-3 sm:py-4 px-2 rounded-2xl bg-gradient-to-br from-[#1A1816]/80 to-[#141311]/90 backdrop-blur-md border border-white/10 hover:border-[#D4AF37]/40 transition-all active:scale-[0.98] shadow-lg overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]" />
             <div className="relative z-10 p-1.5 sm:p-2 rounded-full bg-black/40 group-hover:bg-[#D4AF37]/10 transition-colors border border-white/5 shadow-inner">
               <Receipt className="w-4 h-4 sm:w-5 sm:h-5 text-[#D4AF37]/70 group-hover:text-[#D4AF37] transition-colors shrink-0" />
@@ -652,7 +715,7 @@ export default function App() {
         </div>
       </div>
 
-      {}
+      {/* Navigation */}
       <div className="sticky top-[60px] sm:top-[70px] z-30 backdrop-blur-xl bg-[#141311]/90 border-b border-white/5 py-2 mt-1 sm:mt-2">
         <div className="max-w-5xl mx-auto px-3 sm:px-4 space-y-2 sm:space-y-3">
           <div className="relative">
@@ -670,7 +733,7 @@ export default function App() {
           </div>
 
           {!searchQuery && (
-            <div className="flex items-center space-x-2 overflow-x-auto no-scrollbar scroll-smooth py-1.5 px-1 sm:px-2 -mx-1 sm:-mx-2">
+            <div className="flex items-center space-x-2 sm:space-x-3 overflow-x-auto no-scrollbar scroll-smooth py-2 px-2 -mx-2">
               {groupedItems.map((group) => {
                 const isSelected = activeCategoryId === group.id;
                 return (
@@ -693,7 +756,7 @@ export default function App() {
         </div>
       </div>
 
-      {}
+      {/* Main Menu */}
       <main className="max-w-5xl mx-auto px-3 sm:px-4 mt-2">
         {isLoading ? (
           <div className="space-y-6 sm:space-y-8">
@@ -765,12 +828,22 @@ export default function App() {
                           </div>
                         </div>
 
+                        {/* Card Content */}
                         <div className="p-3 sm:p-4 flex-1 flex flex-col justify-between">
                           <div>
                             <h3 onClick={() => setSelectedDish(dish)} className="text-sm sm:text-base font-bold text-white group-hover:text-[#D4AF37] transition-colors cursor-pointer line-clamp-1 tracking-wide">
                               {dish.name[lang] || dish.name.am}
                             </h3>
-                            <p className="text-[11px] sm:text-xs text-stone-400 mt-1 sm:mt-1.5 line-clamp-2 leading-relaxed font-medium">{dish.description[lang] || dish.description.am}</p>
+                            <p className="text-[11px] sm:text-xs text-stone-400 mt-1 sm:mt-1.5 line-clamp-2 leading-relaxed font-medium">
+                              {dish.description[lang] || dish.description.am}
+                            </p>
+                            
+                            {(dish.ingredients?.[lang] || dish.ingredients?.am) && (
+                              <p className="text-[9px] sm:text-[10px] text-stone-500 mt-1.5 line-clamp-1 italic">
+                                <span className="text-[#D4AF37]/80 mr-1 font-bold">{tLang.ingredients}:</span>
+                                {dish.ingredients[lang] || dish.ingredients.am}
+                              </p>
+                            )}
                           </div>
 
                           <div className="mt-3 sm:mt-4 pt-3 border-t border-white/5 flex items-center justify-between">
@@ -808,9 +881,21 @@ export default function App() {
         )}
       </main>
 
-      {}
+      {/* Footer */}
+      <footer className="mt-8 sm:mt-12 text-center pb-4">
+        <a 
+          href="https://appseapro.com/" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="text-[10px] sm:text-xs font-medium text-white/30 hover:text-white/60 transition-colors tracking-wide"
+        >
+          Design by Elena Sotnikova
+        </a>
+      </footer>
+
+      {/* Dish Modal */}
       {selectedDish && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-5 bg-black/90 backdrop-blur-xl">
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 sm:p-5 bg-black/90 backdrop-blur-xl">
           <div className="bg-[#141311] border border-white/10 max-w-md w-full rounded-3xl overflow-hidden shadow-2xl relative flex flex-col animate-modal-enter max-h-[90dvh]">
             
             <button
@@ -841,6 +926,15 @@ export default function App() {
                 </h2>
                 <p className="text-sm sm:text-base text-stone-400 mt-2 sm:mt-3 leading-relaxed font-medium">{selectedDish.description[lang] || selectedDish.description.am}</p>
                 
+                {(selectedDish.ingredients?.[lang] || selectedDish.ingredients?.am) && (
+                  <div className="mt-4 p-3.5 bg-white/5 rounded-2xl border border-white/5 shadow-inner">
+                    <span className="text-[10px] sm:text-[11px] text-[#D4AF37] font-bold uppercase tracking-wider block mb-1.5">{tLang.ingredients}</span>
+                    <p className="text-xs sm:text-sm text-stone-300 font-medium leading-relaxed">
+                      {selectedDish.ingredients[lang] || selectedDish.ingredients.am}
+                    </p>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-3 gap-2 mt-5 sm:mt-6 p-3 sm:p-4 bg-white/5 rounded-2xl border border-white/5 text-center shadow-inner">
                   <div><div className="text-[9px] sm:text-[10px] text-stone-500 uppercase font-bold tracking-wider">{tLang.prepTime}</div><div className="text-[11px] sm:text-xs font-bold text-stone-200 mt-1">{selectedDish.prepTime || '—'}</div></div>
                   <div className="border-x border-white/5"><div className="text-[9px] sm:text-[10px] text-stone-500 uppercase font-bold tracking-wider">{tLang.portion}</div><div className="text-[11px] sm:text-xs font-bold text-stone-200 mt-1">{selectedDish.weight || '—'}</div></div>
@@ -867,26 +961,7 @@ export default function App() {
         </div>
       )}
 
-      {}
-      {showBillModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-up">
-          <div className="bg-[#1A1816] border border-white/10 max-w-sm w-full rounded-3xl p-6 shadow-2xl relative text-center">
-            <div className="w-12 h-12 rounded-full bg-[#D4AF37]/10 text-[#D4AF37] flex items-center justify-center mx-auto mb-4 border border-[#D4AF37]/20"><Receipt className="w-6 h-6" /></div>
-            <h3 className="font-black text-lg text-white mb-5 tracking-wide">{tLang.requestBill} <span className="text-[#D4AF37] font-medium">({tLang.table} #{tableNumber})</span></h3>
-            <div className="grid grid-cols-2 gap-3">
-              <button onClick={() => handleRequestBill('cash')} className="group flex flex-col items-center gap-2 p-4 rounded-2xl bg-white/5 hover:bg-[#D4AF37]/10 text-stone-300 hover:text-white border border-white/5 hover:border-[#D4AF37]/40 transition-all active:scale-95">
-                <Banknote className="w-6 h-6 text-[#E8C972] group-hover:scale-110 transition-transform" /> <span className="text-[11px] font-bold tracking-wide">{tLang.cash}</span>
-              </button>
-              <button onClick={() => handleRequestBill('card')} className="group flex flex-col items-center gap-2 p-4 rounded-2xl bg-white/5 hover:bg-[#D4AF37]/10 text-stone-300 hover:text-white border border-white/5 hover:border-[#D4AF37]/40 transition-all active:scale-95">
-                <CreditCard className="w-6 h-6 text-[#E8C972] group-hover:scale-110 transition-transform" /> <span className="text-[11px] font-bold tracking-wide">{tLang.card}</span>
-              </button>
-            </div>
-            <button onClick={() => setShowBillModal(false)} className="mt-5 text-[11px] text-stone-500 hover:text-white p-2 font-bold uppercase tracking-wider transition-colors">Отмена</button>
-          </div>
-        </div>
-      )}
-
-      {}
+      {/* Floating Cart Button */}
       {cartItemCount > 0 && !isCartOpen && (
         <div className="fixed bottom-[12px] left-0 right-0 z-40 px-4 sm:px-8 pb-[env(safe-area-inset-bottom)] flex justify-center animate-fade-up pointer-events-none">
           <button onClick={() => setIsCartOpen(true)} className={`w-full max-w-md bg-[#1A1816]/60 backdrop-blur-xl border border-[#D4AF37]/30 text-white font-bold p-3.5 sm:p-4 rounded-[1.25rem] sm:rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.5)] flex items-center justify-between transition-all pointer-events-auto ${bumpCart ? 'animate-pulse-cart scale-[1.02]' : 'hover:scale-[1.02] hover:bg-[#1A1816]/80 hover:border-[#D4AF37]/50 active:scale-[0.98]'}`}>
@@ -907,7 +982,7 @@ export default function App() {
         </div>
       )}
 
-      {}
+      {/* Cart Modal */}
       {isCartOpen && (
         <div className="fixed inset-0 z-[100] flex flex-col justify-end">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-md transition-opacity" onClick={() => setIsCartOpen(false)} />
@@ -936,19 +1011,28 @@ export default function App() {
             <div className="flex-1 overflow-y-auto no-scrollbar">
               <div className="p-3 sm:p-6 space-y-3 sm:space-y-4">
                 {cartList.map(item => (
-                  <div key={item.id} className="flex gap-3 sm:gap-4 items-center bg-[#1A1816] p-2 sm:p-3 rounded-2xl sm:rounded-3xl border border-white/5 shadow-inner">
-                    <img src={item.image} alt={item.name[lang] || item.name.am} className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl sm:rounded-2xl object-cover shadow-md shrink-0" />
-                    <div className="flex-1 flex flex-col justify-center min-w-0">
-                      <h4 className="font-bold text-white text-[11px] sm:text-sm truncate sm:line-clamp-2 sm:whitespace-normal leading-tight mb-1 tracking-wide">{item.name[lang] || item.name.am}</h4>
-                      <div className="text-[#D4AF37] font-black text-xs sm:text-sm tracking-tight">{(item.price * item.quantity).toLocaleString()} ֏</div>
-                    </div>
-                    <div className="flex flex-col items-end gap-2 shrink-0 pr-1">
-                      <div className="flex items-center gap-1 sm:gap-3 bg-black/50 rounded-full px-1.5 sm:px-2 py-1 border border-white/10 shadow-inner">
-                        <button onClick={() => updateQuantity(item.id, -1)} className="p-1 sm:p-2 text-stone-400 hover:text-white transition-colors"><Minus className="w-3 h-3 sm:w-4 sm:h-4" /></button>
-                        <span className="font-bold text-white text-[11px] sm:text-xs min-w-[1.5ch] text-center">{item.quantity}</span>
-                        <button onClick={() => updateQuantity(item.id, 1)} className="p-1 sm:p-2 text-[#D4AF37] hover:text-[#E8C972] transition-colors"><Plus className="w-3 h-3 sm:w-4 sm:h-4" /></button>
+                  <div key={item.id} className="flex flex-col gap-2 sm:gap-3 bg-[#1A1816] p-2 sm:p-3 rounded-2xl sm:rounded-3xl border border-white/5 shadow-inner">
+                    <div className="flex gap-3 sm:gap-4 items-center">
+                      <img src={item.image} alt={item.name[lang] || item.name.am} className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl sm:rounded-2xl object-cover shadow-md shrink-0" />
+                      <div className="flex-1 flex flex-col justify-center min-w-0">
+                        <h4 className="font-bold text-white text-[11px] sm:text-sm truncate sm:line-clamp-2 sm:whitespace-normal leading-tight mb-1 tracking-wide">{item.name[lang] || item.name.am}</h4>
+                        <div className="text-[#D4AF37] font-black text-xs sm:text-sm tracking-tight">{(item.price * item.quantity).toLocaleString()} ֏</div>
+                      </div>
+                      <div className="flex flex-col items-end gap-2 shrink-0 pr-1">
+                        <div className="flex items-center gap-1 sm:gap-3 bg-black/50 rounded-full px-1.5 sm:px-2 py-1 border border-white/10 shadow-inner">
+                          <button onClick={() => updateQuantity(item.id, -1)} className="p-1 sm:p-2 text-stone-400 hover:text-white transition-colors"><Minus className="w-3 h-3 sm:w-4 sm:h-4" /></button>
+                          <span className="font-bold text-white text-[11px] sm:text-xs min-w-[1.5ch] text-center">{item.quantity}</span>
+                          <button onClick={() => updateQuantity(item.id, 1)} className="p-1 sm:p-2 text-[#D4AF37] hover:text-[#E8C972] transition-colors"><Plus className="w-3 h-3 sm:w-4 sm:h-4" /></button>
+                        </div>
                       </div>
                     </div>
+                    <input
+                      type="text"
+                      placeholder={tLang.commentPlaceholder}
+                      value={item.comment || ''}
+                      onChange={(e) => updateItemComment(item.id, e.target.value)}
+                      className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-[11px] sm:text-xs text-stone-300 placeholder-stone-600 focus:outline-none focus:border-[#D4AF37]/50 focus:ring-1 focus:ring-[#D4AF37]/50 transition-all font-medium"
+                    />
                   </div>
                 ))}
               </div>
@@ -962,10 +1046,12 @@ export default function App() {
                   <div className="flex gap-3 sm:gap-4 overflow-x-auto no-scrollbar px-4 sm:px-6 pb-2 snap-x">
                     {dynamicUpsellItems.map(upItem => (
                       <div key={upItem.id} className="w-[100px] sm:w-[140px] snap-start bg-[#1A1816] border border-white/5 rounded-2xl sm:rounded-3xl p-2.5 sm:p-3 flex flex-col items-center text-center shadow-lg shrink-0">
-                        <img src={upItem.image} alt={upItem.name[lang] || upItem.name.am} className="w-[80px] h-[80px] sm:w-24 sm:h-24 rounded-xl sm:rounded-2xl object-cover mb-2.5 sm:mb-3 shadow-md shrink-0" />
-                        <span className="text-[10px] sm:text-xs font-bold text-stone-200 mb-1.5 line-clamp-2 flex-1 leading-tight tracking-wide">{upItem.name[lang] || upItem.name.am}</span>
-                        <span className="text-[#D4AF37] text-[11px] sm:text-sm font-black mb-2 tracking-tight">{upItem.price.toLocaleString()} ֏</span>
-                        <button onClick={() => addToCart({...upItem, available: true, tags: []})} className="w-full bg-white/5 hover:bg-[#D4AF37] hover:text-black border border-white/10 hover:border-transparent py-2 rounded-xl text-[10px] sm:text-xs font-bold transition-colors flex items-center justify-center gap-1.5 active:scale-95">
+                        <div className="cursor-pointer flex flex-col items-center w-full" onClick={() => setSelectedDish(upItem)}>
+                          <img src={upItem.image} alt={upItem.name[lang] || upItem.name.am} className="w-[80px] h-[80px] sm:w-24 sm:h-24 rounded-xl sm:rounded-2xl object-cover mb-2.5 sm:mb-3 shadow-md shrink-0" />
+                          <span className="text-[10px] sm:text-xs font-bold text-stone-200 mb-1.5 line-clamp-2 flex-1 leading-tight tracking-wide">{upItem.name[lang] || upItem.name.am}</span>
+                          <span className="text-[#D4AF37] text-[11px] sm:text-sm font-black mb-2 tracking-tight">{upItem.price.toLocaleString()} ֏</span>
+                        </div>
+                        <button onClick={() => addToCart({...upItem, available: true, tags: []})} className="w-full bg-white/5 hover:bg-[#D4AF37] hover:text-black border border-white/10 hover:border-transparent py-2 rounded-xl text-[10px] sm:text-xs font-bold transition-colors flex items-center justify-center gap-1.5 active:scale-95 mt-1">
                           <Plus className="w-3 h-3 sm:w-3.5 sm:h-3.5 stroke-[3]" /> <span className="uppercase tracking-wider">{tLang.addToCart}</span>
                         </button>
                       </div>
@@ -988,7 +1074,7 @@ export default function App() {
         </div>
       )}
 
-      {}
+      {/* Checkout Modal */}
       {isCheckoutModalOpen && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-up">
           <div className="bg-[#141311] border border-[#D4AF37]/30 max-w-md w-full rounded-3xl p-6 shadow-2xl relative">
@@ -1027,7 +1113,7 @@ export default function App() {
         </div>
       )}
 
-      {}
+      {/* Order Confirmed Modal */}
       {orderConfirmed && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/95 backdrop-blur-xl animate-fade-up">
           <div className="bg-[#1A1816] border border-[#D4AF37]/30 max-w-sm w-full rounded-3xl p-8 text-center shadow-2xl relative overflow-hidden">
@@ -1040,7 +1126,26 @@ export default function App() {
         </div>
       )}
 
-      {}
+      {/* Bill Modal */}
+      {showBillModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-up">
+          <div className="bg-[#1A1816] border border-white/10 max-w-sm w-full rounded-3xl p-6 shadow-2xl relative text-center">
+            <div className="w-12 h-12 rounded-full bg-[#D4AF37]/10 text-[#D4AF37] flex items-center justify-center mx-auto mb-4 border border-[#D4AF37]/20"><Receipt className="w-6 h-6" /></div>
+            <h3 className="font-black text-lg text-white mb-5 tracking-wide">{tLang.requestBill} <span className="text-[#D4AF37] font-medium">({tLang.table} #{tableNumber})</span></h3>
+            <div className="grid grid-cols-2 gap-3">
+              <button onClick={() => handleRequestBill('cash')} className="group flex flex-col items-center gap-2 p-4 rounded-2xl bg-white/5 hover:bg-[#D4AF37]/10 text-stone-300 hover:text-white border border-white/5 hover:border-[#D4AF37]/40 transition-all active:scale-95">
+                <Banknote className="w-6 h-6 text-[#E8C972] group-hover:scale-110 transition-transform" /> <span className="text-[11px] font-bold tracking-wide">{tLang.cash}</span>
+              </button>
+              <button onClick={() => handleRequestBill('card')} className="group flex flex-col items-center gap-2 p-4 rounded-2xl bg-white/5 hover:bg-[#D4AF37]/10 text-stone-300 hover:text-white border border-white/5 hover:border-[#D4AF37]/40 transition-all active:scale-95">
+                <CreditCard className="w-6 h-6 text-[#E8C972] group-hover:scale-110 transition-transform" /> <span className="text-[11px] font-bold tracking-wide">{tLang.card}</span>
+              </button>
+            </div>
+            <button onClick={() => setShowBillModal(false)} className="mt-5 text-[11px] text-stone-500 hover:text-white p-2 font-bold uppercase tracking-wider transition-colors">Отмена</button>
+          </div>
+        </div>
+      )}
+
+      {/* Table Picker Modal */}
       {showTablePicker && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
           <div className="bg-[#1A1816] border border-white/10 max-w-sm w-full rounded-3xl p-6 shadow-2xl">
