@@ -702,14 +702,6 @@ export default function App() {
                 </button>
               ))}
             </div>
-            <button
-              onClick={() => setShowTablePicker(true)}
-              className="group flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full bg-white/5 border border-white/10 hover:border-[#D4AF37]/50 hover:bg-white/10 transition-all hover:scale-105 active:scale-95 shrink-0 shadow-inner"
-            >
-              <span className="relative flex h-1.5 w-1.5 sm:h-2 sm:w-2 shrink-0"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#D4AF37] opacity-75"></span><span className="relative inline-flex rounded-full h-1.5 w-1.5 sm:h-2 sm:w-2 bg-[#B5952F]"></span></span>
-              <span className="text-[9px] sm:text-[10px] font-bold text-stone-300">{tLang.table}: <span className="text-[#D4AF37] font-black">#{tableNumber}</span></span>
-              <ChevronDown className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-stone-400 group-hover:text-[#D4AF37] transition-transform shrink-0" />
-            </button>
           </div>
 
         </div>
