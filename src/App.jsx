@@ -253,12 +253,48 @@ export default function App() {
   const [honeypotValue, setHoneypotValue] = useState('');
 
   const [showBillModal, setShowBillModal] = useState(false);
+  const [showServiceMenu, setShowServiceMenu] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
   
   const isManualScroll = useRef(false);
   const scrollTimeout = useRef(null);
   
   const [bumpCart, setBumpCart] = useState(false);
+  const [flyingParticles, setFlyingParticles] = useState([]);
+
+  const triggerFlyAnimation = (e) => {
+    let startX = typeof window !== 'undefined' ? window.innerWidth / 2 : 200;
+    let startY = typeof window !== 'undefined' ? window.innerHeight / 2 : 400;
+    if (e && e.currentTarget && e.currentTarget.getBoundingClientRect) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      startX = rect.left + rect.width / 2;
+      startY = rect.top + rect.height / 2;
+    } else if (e && e.clientX && e.clientY && (e.clientX !== 0 || e.clientY !== 0)) {
+      startX = e.clientX;
+      startY = e.clientY;
+    }
+    
+    let endX = typeof window !== 'undefined' ? window.innerWidth / 2 + 24 : 224;
+    let endY = typeof window !== 'undefined' ? window.innerHeight - 38 : 600;
+    const dockCart = typeof document !== 'undefined' ? document.getElementById('dock-cart-btn') : null;
+    if (dockCart) {
+      const rect = dockCart.getBoundingClientRect();
+      endX = rect.left + rect.width / 2;
+      endY = rect.top + rect.height / 2;
+    }
+
+    const id = Date.now() + Math.random();
+    setFlyingParticles(prev => [...prev.slice(-3), { id, startX, startY, endX, endY }]);
+    setTimeout(() => {
+      setFlyingParticles(prev => prev.filter(p => p.id !== id));
+    }, 950);
+
+    setTimeout(() => {
+      setBumpCart(true);
+      triggerHaptic('medium');
+      setTimeout(() => setBumpCart(false), 550);
+    }, 780);
+  };
 
   const triggerHaptic = (type = 'light') => {
     if (typeof window !== 'undefined' && window.navigator && window.navigator.vibrate) {
@@ -541,7 +577,8 @@ export default function App() {
     return cheapItems.length > 0 ? cheapItems.slice(0, 6) : [];
   }, [menuItems]);
 
-  const addToCart = (dish, customComment = '') => {
+  const addToCart = (dish, customComment = '', e = null) => {
+    if (e) triggerFlyAnimation(e);
     triggerHaptic('medium');
     if (dish.available === false) { showToast(tLang.inStopList); return; }
     setCart(prev => {
@@ -552,7 +589,8 @@ export default function App() {
     showToast(`«${dish.name[lang] || dish.name.am}» ${tLang.addToCart}`);
   };
 
-  const updateQuantity = (dishId, delta) => {
+  const updateQuantity = (dishId, delta, e = null) => {
+    if (delta > 0 && e) triggerFlyAnimation(e);
     triggerHaptic('light');
     setCart(prev => {
       const current = prev[dishId];
@@ -585,7 +623,7 @@ export default function App() {
   const cartSubtotal = useMemo(() => cartList.reduce((sum, i) => sum + i.price * i.quantity, 0), [cartList]);
 
   useEffect(() => {
-    if (cartItemCount > 0) {
+    if (cartItemCount > 0 && flyingParticles.length === 0) {
       setBumpCart(true);
       const timer = setTimeout(() => setBumpCart(false), 300);
       return () => clearTimeout(timer);
@@ -646,10 +684,44 @@ export default function App() {
         @keyframes skeletonShimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
         @keyframes modalEnter { 0% { opacity: 0; transform: scale(0.95) translateY(10px); } 100% { opacity: 1; transform: scale(1) translateY(0); } }
         
+        @keyframes flyX {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(var(--target-x)); }
+        }
+        @keyframes flyY {
+          0% { 
+            transform: translateY(0); 
+            animation-timing-function: cubic-bezier(0.1, 0.7, 0.25, 1);
+          }
+          22% { 
+            transform: translateY(-40px); 
+            animation-timing-function: cubic-bezier(0.45, 0.05, 0.85, 0.7);
+          }
+          100% { 
+            transform: translateY(var(--target-y)); 
+          }
+        }
+        @keyframes sparkleGlow {
+          0% { transform: scale(0.4); opacity: 0; }
+          18% { transform: scale(1.35); opacity: 1; }
+          75% { transform: scale(1.05); opacity: 1; }
+          100% { transform: scale(0.25); opacity: 0; }
+        }
+        @keyframes cartSpringBounce {
+          0% { transform: scale(1); }
+          35% { transform: scale(1.045); }
+          65% { transform: scale(0.985); }
+          100% { transform: scale(1); }
+        }
+        
         .animate-fade-up { animation: fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) both; }
         .animate-slide-up { animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         .animate-bounce-scale { animation: bounceScale 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) both; }
         .animate-pulse-cart { animation: pulseCart 0.3s ease-in-out; }
+        .animate-fly-x { animation: flyX 0.85s cubic-bezier(0.25, 0.4, 0.25, 1) forwards; will-change: transform; }
+        .animate-fly-y { animation: flyY 0.85s forwards; will-change: transform; }
+        .animate-sparkle-glow { animation: sparkleGlow 0.85s ease-out forwards; will-change: transform, opacity; }
+        .animate-cart-spring { animation: cartSpringBounce 0.55s cubic-bezier(0.25, 1, 0.5, 1) both; will-change: transform; }
         .animate-modal-enter { animation: modalEnter 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         
         .skeleton-loader { position: relative; overflow: hidden; background-color: rgba(255, 255, 255, 0.05); }
@@ -673,9 +745,29 @@ export default function App() {
         </div>
       )}
 
+      {/* Flying Golden Particles */}
+      {flyingParticles.map(p => (
+        <div
+          key={p.id}
+          className="fixed pointer-events-none z-[120] animate-fly-x"
+          style={{
+            left: `${p.startX}px`,
+            top: `${p.startY}px`,
+            '--target-x': `${p.endX - p.startX}px`,
+            '--target-y': `${p.endY - p.startY}px`,
+          }}
+        >
+          <div className="animate-fly-y">
+            <div className="w-5 h-5 -ml-2.5 -mt-2.5 rounded-full bg-gradient-to-tr from-[#E8C972] via-[#FFDF79] to-[#FFF6D6] shadow-[0_0_25px_rgba(212,175,55,0.95),0_0_10px_#FFF] flex items-center justify-center text-stone-950 font-black animate-sparkle-glow">
+              <Sparkles className="w-3 h-3 text-stone-950" />
+            </div>
+          </div>
+        </div>
+      ))}
+
       {/* Header */}
-      <header className="sticky top-0 z-40 backdrop-blur-xl bg-[#141311]/85 border-b border-white/5 shadow-md">
-        <div className="max-w-5xl mx-auto px-3 sm:px-4 py-2 sm:py-3 flex items-center justify-between gap-2">
+      <header className="sticky top-0 z-40 backdrop-blur-xl bg-[#141311]/95 border-b border-white/5 shadow-md">
+        <div className="max-w-5xl mx-auto px-3 sm:px-4 h-14 flex items-center justify-between gap-2">
           
           <div className="flex items-center space-x-2 sm:space-x-3 min-w-0 flex-1">
             <div className="w-8 h-8 sm:w-10 sm:h-10 shrink-0 flex items-center justify-center overflow-hidden">
@@ -721,53 +813,30 @@ export default function App() {
             </div>
           </div>
         </div>
-        
-        <div className="grid grid-cols-2 gap-2 sm:gap-3 mt-4">
-          <button onClick={handleCallWaiter} className="group relative flex items-center justify-center gap-2 sm:gap-3 py-3 sm:py-4 px-2 rounded-2xl bg-gradient-to-br from-[#1A1816]/80 to-[#141311]/90 backdrop-blur-md border border-white/10 hover:border-[#D4AF37]/40 transition-all active:scale-[0.98] shadow-lg overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]" />
-            <div className="relative z-10 p-1.5 sm:p-2 rounded-full bg-black/40 group-hover:bg-[#D4AF37]/10 transition-colors border border-white/5 shadow-inner">
-              <Bell className="w-4 h-4 sm:w-5 sm:h-5 text-[#D4AF37]/70 group-hover:text-[#D4AF37] transition-colors shrink-0" />
-            </div>
-            <span className="relative z-10 text-xs sm:text-sm font-bold text-stone-200 group-hover:text-white transition-colors truncate tracking-wide">{tLang.callWaiter}</span>
-          </button>
-          
-          <button onClick={() => {
-            const now = Date.now();
-            const lastCall = parseInt(localStorage.getItem('ech_last_bill') || '0', 10);
-            if (now - lastCall < 60000) {
-              showToast(tLang.pleaseWait);
-            } else {
-              setShowBillModal(true);
-            }
-          }} className="group relative flex items-center justify-center gap-2 sm:gap-3 py-3 sm:py-4 px-2 rounded-2xl bg-gradient-to-br from-[#1A1816]/80 to-[#141311]/90 backdrop-blur-md border border-white/10 hover:border-[#D4AF37]/40 transition-all active:scale-[0.98] shadow-lg overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]" />
-            <div className="relative z-10 p-1.5 sm:p-2 rounded-full bg-black/40 group-hover:bg-[#D4AF37]/10 transition-colors border border-white/5 shadow-inner">
-              <Receipt className="w-4 h-4 sm:w-5 sm:h-5 text-[#D4AF37]/70 group-hover:text-[#D4AF37] transition-colors shrink-0" />
-            </div>
-            <span className="relative z-10 text-xs sm:text-sm font-bold text-stone-200 group-hover:text-white transition-colors truncate tracking-wide">{tLang.requestBill}</span>
-          </button>
+      </div>
+
+      {/* Search Input (scrolls away naturally with the page) */}
+      <div className="max-w-5xl mx-auto px-3 sm:px-4 pt-2 pb-1">
+        <div className="relative">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-500" />
+          <input
+            type="text" placeholder={tLang.searchPlaceholder} value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-9 py-2.5 text-xs sm:text-sm text-white placeholder-stone-500 focus:outline-none focus:border-[#D4AF37]/80 transition-all font-medium"
+          />
+          {searchQuery && (
+            <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-500 hover:text-stone-300 p-0.5">
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Navigation */}
-      <div className="sticky top-[60px] sm:top-[70px] z-30 backdrop-blur-xl bg-[#141311]/90 border-b border-white/5 py-2 mt-1 sm:mt-2">
-        <div className="max-w-5xl mx-auto px-3 sm:px-4 space-y-2 sm:space-y-3">
-          <div className="relative">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-500" />
-            <input
-              type="text" placeholder={tLang.searchPlaceholder} value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-9 py-2 text-xs sm:text-sm text-white placeholder-stone-500 focus:outline-none focus:border-[#D4AF37]/80 transition-all font-medium"
-            />
-            {searchQuery && (
-              <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-500 hover:text-stone-300 p-0.5">
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-
-          {!searchQuery && (
-            <div className="flex items-center space-x-2 sm:space-x-3 overflow-x-auto no-scrollbar scroll-smooth py-2 px-2 -mx-2">
+      {/* Sticky Categories Bar (seamlessly docked to Header at top-14 with 0px gap) */}
+      {!searchQuery && (
+        <div className="sticky top-14 z-30 backdrop-blur-xl bg-[#141311]/95 border-b border-white/5 py-1 sm:py-1.5">
+          <div className="max-w-5xl mx-auto px-3 sm:px-4">
+            <div className="flex items-center space-x-2 sm:space-x-3 overflow-x-auto no-scrollbar scroll-smooth py-2 px-1">
               {groupedItems.map((group) => {
                 const isSelected = activeCategoryId === group.id;
                 return (
@@ -786,9 +855,9 @@ export default function App() {
                 );
               })}
             </div>
-          )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Main Menu */}
       <main className="max-w-5xl mx-auto px-3 sm:px-4 mt-2">
@@ -894,12 +963,12 @@ export default function App() {
                                   {inCartItem.quantity === 1 ? <Trash2 className="w-3 sm:w-3.5 h-3 sm:h-3.5 text-rose-400" /> : <Minus className="w-3 sm:w-3.5 h-3 sm:h-3.5" />}
                                 </button>
                                 <span className="text-xs sm:text-sm font-bold px-1 min-w-[1.2rem] sm:min-w-[1.5rem] text-center text-[#E8C972]">{inCartItem.quantity}</span>
-                                <button onClick={() => updateQuantity(dish.id, 1)} className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-[#D4AF37] hover:bg-[#E8C972] text-stone-950 flex items-center justify-center transition-all font-bold">
+                                <button onClick={(e) => updateQuantity(dish.id, 1, e)} className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-[#D4AF37] hover:bg-[#E8C972] text-stone-950 flex items-center justify-center transition-all font-bold">
                                   <Plus className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
                                 </button>
                               </div>
                             ) : (
-                              <button onClick={() => addToCart(dish)} className="px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-white/5 hover:bg-[#D4AF37] hover:text-black border border-[#D4AF37]/30 hover:border-[#D4AF37] text-[#D4AF37] font-bold text-xs sm:text-sm flex items-center gap-1.5 shadow-md active:scale-95 transition-all">
+                              <button onClick={(e) => addToCart(dish, '', e)} className="px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-white/5 hover:bg-[#D4AF37] hover:text-black border border-[#D4AF37]/30 hover:border-[#D4AF37] text-[#D4AF37] font-bold text-xs sm:text-sm flex items-center gap-1.5 shadow-md active:scale-95 transition-all">
                                 <Plus className="w-3 h-3 sm:w-3.5 sm:h-3.5 stroke-[3]" /> <span>{tLang.addToCart}</span>
                               </button>
                             )}
@@ -981,7 +1050,7 @@ export default function App() {
                 <div className="text-2xl sm:text-3xl font-black text-[#D4AF37] truncate tracking-tight">{selectedDish.price.toLocaleString()} ֏</div>
               </div>
               {selectedDish.available ? (
-                <button onClick={() => { addToCart(selectedDish); setSelectedDish(null); }} className="px-6 sm:px-8 py-3.5 sm:py-4 rounded-xl sm:rounded-2xl bg-gradient-to-r from-[#E8C972] to-[#B5952F] text-stone-950 font-extrabold text-xs sm:text-sm flex items-center gap-2 shadow-[0_8px_20px_rgba(212,175,55,0.3)] active:scale-95 transition-all shrink-0">
+                <button onClick={(e) => { addToCart(selectedDish, '', e); setSelectedDish(null); }} className="px-6 sm:px-8 py-3.5 sm:py-4 rounded-xl sm:rounded-2xl bg-gradient-to-r from-[#E8C972] to-[#B5952F] text-stone-950 font-extrabold text-xs sm:text-sm flex items-center gap-2 shadow-[0_8px_20px_rgba(212,175,55,0.3)] active:scale-95 transition-all shrink-0">
                   <ShoppingBag className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" /> <span className="whitespace-nowrap tracking-wide">{tLang.addToCart}</span>
                 </button>
               ) : (
@@ -993,24 +1062,63 @@ export default function App() {
         </div>
       )}
 
-      {/* Floating Cart Button */}
-      {cartItemCount > 0 && !isCartOpen && (
-        <div className="fixed bottom-[12px] left-0 right-0 z-40 px-4 sm:px-8 pb-[env(safe-area-inset-bottom)] flex justify-center animate-fade-up pointer-events-none">
-          <button onClick={() => setIsCartOpen(true)} className={`w-full max-w-md bg-[#1A1816]/60 backdrop-blur-xl border border-[#D4AF37]/30 text-white font-bold p-3.5 sm:p-4 rounded-[1.25rem] sm:rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.5)] flex items-center justify-between transition-all pointer-events-auto ${bumpCart ? 'animate-pulse-cart scale-[1.02]' : 'hover:scale-[1.02] hover:bg-[#1A1816]/80 hover:border-[#D4AF37]/50 active:scale-[0.98]'}`}>
-            <div className="flex items-center gap-3 sm:gap-4">
-              <div className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl bg-[#D4AF37]/20 border border-[#D4AF37]/30 flex items-center justify-center font-black text-sm sm:text-base text-[#D4AF37] shadow-inner transition-transform ${bumpCart ? 'animate-bounce-scale' : ''}`}>
-                {cartItemCount}
-              </div>
-              <div className="text-left">
-                <div className="text-[11px] sm:text-xs uppercase tracking-wider font-extrabold text-stone-300 mb-0.5">{tLang.table} #{tableNumber}</div>
-                <div className="text-sm sm:text-base font-black tracking-wide">{tLang.cartTitle}</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-1.5 sm:gap-2 text-[#D4AF37]">
-              <span className="text-base sm:text-lg font-black tracking-tight">{cartSubtotal.toLocaleString()} ֏</span>
-              <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
-            </div>
-          </button>
+      {/* Smart Bottom Bar-Transformer (Full Width Dock) */}
+      {!isCartOpen && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 bg-[#141311]/95 backdrop-blur-2xl border-t border-[#D4AF37]/25 shadow-[0_-10px_30px_rgba(0,0,0,0.8)] pt-2.5 sm:pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] px-3 sm:px-6 transition-all animate-fade-up">
+          <div className="w-full max-w-md mx-auto flex items-center gap-2">
+            {cartItemCount === 0 ? (
+              <>
+                <button
+                  onClick={handleCallWaiter}
+                  className="flex-1 flex items-center justify-center gap-2 py-3.5 px-3 rounded-2xl bg-white/5 hover:bg-[#D4AF37]/10 border border-white/10 hover:border-[#D4AF37]/40 text-stone-200 hover:text-white font-bold text-xs sm:text-sm transition-all active:scale-[0.98] shadow-sm"
+                >
+                  <Bell className="w-4 h-4 text-[#D4AF37] shrink-0" />
+                  <span className="truncate tracking-wide">{tLang.callWaiter}</span>
+                </button>
+                <button
+                  onClick={() => {
+                    const now = Date.now();
+                    const lastCall = parseInt(localStorage.getItem('ech_last_bill') || '0', 10);
+                    if (now - lastCall < 60000) {
+                      showToast(tLang.pleaseWait);
+                    } else {
+                      setShowBillModal(true);
+                    }
+                  }}
+                  className="flex-1 flex items-center justify-center gap-2 py-3.5 px-3 rounded-2xl bg-white/5 hover:bg-[#D4AF37]/10 border border-white/10 hover:border-[#D4AF37]/40 text-stone-200 hover:text-white font-bold text-xs sm:text-sm transition-all active:scale-[0.98] shadow-sm"
+                >
+                  <Receipt className="w-4 h-4 text-[#D4AF37] shrink-0" />
+                  <span className="truncate tracking-wide">{tLang.requestBill}</span>
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => setShowServiceMenu(true)}
+                  className="w-12 h-12 rounded-2xl bg-[#D4AF37]/15 hover:bg-[#D4AF37]/25 border border-[#D4AF37]/40 flex items-center justify-center text-[#D4AF37] shrink-0 transition-all active:scale-95 shadow-inner"
+                  title={tLang.callWaiter}
+                >
+                  <Bell className="w-5 h-5" />
+                </button>
+                <button
+                  id="dock-cart-btn"
+                  onClick={() => setIsCartOpen(true)}
+                  className={`flex-1 bg-gradient-to-r from-[#E8C972] to-[#B5952F] text-stone-950 font-black p-3 sm:p-3.5 rounded-2xl shadow-[0_4px_20px_rgba(212,175,55,0.3)] flex items-center justify-between transition-all active:scale-[0.98] ${bumpCart ? 'animate-cart-spring shadow-[0_0_25px_rgba(212,175,55,0.6)]' : 'hover:scale-[1.01]'}`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-6 h-6 rounded-lg bg-stone-950/20 flex items-center justify-center text-xs font-black shrink-0">
+                      {cartItemCount}
+                    </div>
+                    <span className="text-xs sm:text-sm font-black tracking-wide truncate">{tLang.cartTitle}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0 pl-1 font-black text-xs sm:text-sm tracking-tight">
+                    <span>{cartSubtotal.toLocaleString()} ֏</span>
+                    <ChevronRight className="w-4 h-4 stroke-[3]" />
+                  </div>
+                </button>
+              </>
+            )}
+          </div>
         </div>
       )}
 
@@ -1083,7 +1191,7 @@ export default function App() {
                           <span className="text-[10px] sm:text-xs font-bold text-stone-200 mb-1.5 line-clamp-2 flex-1 leading-tight tracking-wide">{upItem.name[lang] || upItem.name.am}</span>
                           <span className="text-[#D4AF37] text-[11px] sm:text-sm font-black mb-2 tracking-tight">{upItem.price.toLocaleString()} ֏</span>
                         </div>
-                        <button onClick={() => addToCart({...upItem, available: true, tags: []})} className="w-full bg-white/5 hover:bg-[#D4AF37] hover:text-black border border-white/10 hover:border-transparent py-2 rounded-xl text-[10px] sm:text-xs font-bold transition-colors flex items-center justify-center gap-1.5 active:scale-95 mt-1">
+                        <button onClick={(e) => addToCart({...upItem, available: true, tags: []}, '', e)} className="w-full bg-white/5 hover:bg-[#D4AF37] hover:text-black border border-white/10 hover:border-transparent py-2 rounded-xl text-[10px] sm:text-xs font-bold transition-colors flex items-center justify-center gap-1.5 active:scale-95 mt-1">
                           <Plus className="w-3 h-3 sm:w-3.5 sm:h-3.5 stroke-[3]" /> <span className="uppercase tracking-wider">{tLang.addToCart}</span>
                         </button>
                       </div>
@@ -1154,6 +1262,30 @@ export default function App() {
             <h3 className="text-2xl font-black text-white mt-2 leading-tight tracking-tight">{tLang.orderConfirmed}</h3>
             <p className="text-sm text-stone-400 mt-3 font-medium leading-relaxed">{tLang.orderConfirmedSub}</p>
             <button onClick={() => setOrderConfirmed(null)} className="mt-8 w-full py-3.5 bg-white/5 border border-white/10 text-white font-bold text-sm rounded-2xl hover:bg-white/10 hover:border-white/20 transition-all uppercase tracking-wider">{tLang.backToMenu}</button>
+          </div>
+        </div>
+      )}
+
+      {/* Service Menu Modal (Waiter / Bill) */}
+      {showServiceMenu && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-up" onClick={() => setShowServiceMenu(false)}>
+          <div className="bg-[#1A1816] border border-[#D4AF37]/30 max-w-sm w-full rounded-3xl p-5 shadow-2xl relative mb-20 sm:mb-0" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-white text-sm tracking-wide flex items-center gap-2">
+                <Bell className="w-4 h-4 text-[#D4AF37]" /> {tLang.table} #{tableNumber}
+              </h3>
+              <button onClick={() => setShowServiceMenu(false)} className="text-stone-400 hover:text-white p-1 bg-white/5 rounded-full transition-colors"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <button onClick={() => { handleCallWaiter(); setShowServiceMenu(false); }} className="group flex flex-col items-center gap-2 p-3.5 rounded-2xl bg-white/5 hover:bg-[#D4AF37]/15 border border-white/5 hover:border-[#D4AF37]/40 text-stone-200 hover:text-white font-bold text-xs transition-all active:scale-95">
+                <Bell className="w-5 h-5 text-[#D4AF37] group-hover:scale-110 transition-transform" />
+                <span className="text-center">{tLang.callWaiter}</span>
+              </button>
+              <button onClick={() => { setShowServiceMenu(false); setShowBillModal(true); }} className="group flex flex-col items-center gap-2 p-3.5 rounded-2xl bg-white/5 hover:bg-[#D4AF37]/15 border border-white/5 hover:border-[#D4AF37]/40 text-stone-200 hover:text-white font-bold text-xs transition-all active:scale-95">
+                <Receipt className="w-5 h-5 text-[#D4AF37] group-hover:scale-110 transition-transform" />
+                <span className="text-center">{tLang.requestBill}</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
