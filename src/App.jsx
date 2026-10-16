@@ -241,11 +241,23 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDish, setSelectedDish] = useState(null);
 
-  const [tableNumber, setTableNumber] = useState('1');
+  const [tableNumber, setTableNumber] = useState(() => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlTable = urlParams.get('table');
+      if (urlTable && urlTable.trim().length > 0) {
+        return urlTable.trim();
+      }
+    } catch (e) {}
+    return null;
+  });
+  const hasTable = Boolean(tableNumber);
   const [showTablePicker, setShowTablePicker] = useState(false);
 
   const [cart, setCart] = useState(() => {
     try {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (!urlParams.get('table')?.trim()) return {};
       const saved = localStorage.getItem('ech_guest_cart');
       if (saved) return JSON.parse(saved);
     } catch (e) {}
@@ -317,6 +329,7 @@ export default function App() {
   };
 
   const handleCallWaiter = async () => {
+    if (!hasTable) return;
     const now = Date.now();
     const lastCall = parseInt(localStorage.getItem('ech_last_waiter') || '0', 10);
     if (now - lastCall < 60000) {
@@ -337,6 +350,7 @@ export default function App() {
   };
 
   const handleRequestBill = async (method) => {
+    if (!hasTable) return;
     const now = Date.now();
     const lastCall = parseInt(localStorage.getItem('ech_last_bill') || '0', 10);
     if (now - lastCall < 60000) {
@@ -382,9 +396,7 @@ export default function App() {
       if (urlTable && urlTable.trim().length > 0) {
         setTableNumber(urlTable.trim());
       } else {
-        const saved = localStorage.getItem('ech_table_no');
-        if (saved) setTableNumber(saved);
-        else setTableNumber('1');
+        setTableNumber(null);
       }
     } catch (e) { console.warn('URL parsing fallback:', e); }
 
@@ -616,6 +628,7 @@ export default function App() {
   }, [menuItems]);
 
   const addToCart = (dish, customComment = '', e = null) => {
+    if (!hasTable) return;
     if (e) triggerFlyAnimation(e);
     triggerHaptic('medium');
     if (dish.available === false) { showToast(tLang.inStopList); return; }
@@ -681,6 +694,7 @@ export default function App() {
 
   const handleCheckoutSubmit = async (e) => {
     e.preventDefault();
+    if (!hasTable) return;
     if (honeypotValue.trim().length > 0) return; 
     if (cartList.length === 0) return;
 
@@ -1006,7 +1020,7 @@ export default function App() {
 
                             {isUnavailable ? (
                               <div className="text-xs sm:text-sm text-stone-400 italic px-2 py-1 bg-white/5 rounded-lg border border-white/10 font-medium">{tLang.inStopList}</div>
-                            ) : inCartItem ? (
+                            ) : !hasTable ? null : inCartItem ? (
                               <div className="flex items-center gap-1.5 sm:gap-2 bg-black/40 border border-[#D4AF37]/40 rounded-xl p-1 shadow-inner backdrop-blur-sm">
                                 <button onClick={() => updateQuantity(dish.id, -1)} className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all">
                                   {inCartItem.quantity === 1 ? <Trash2 className="w-3 sm:w-3.5 h-3 sm:h-3.5 text-rose-400" /> : <Minus className="w-3 sm:w-3.5 h-3 sm:h-3.5" />}
@@ -1099,9 +1113,11 @@ export default function App() {
                 <div className="text-2xl sm:text-3xl font-black text-[#D4AF37] truncate tracking-tight">{selectedDish.price.toLocaleString()} ֏</div>
               </div>
               {selectedDish.available ? (
-                <button onClick={(e) => { addToCart(selectedDish, '', e); setSelectedDish(null); }} className="px-6 sm:px-8 py-3.5 sm:py-4 rounded-xl sm:rounded-2xl bg-gradient-to-r from-[#E8C972] to-[#B5952F] text-stone-950 font-extrabold text-xs sm:text-sm flex items-center gap-2 shadow-[0_8px_20px_rgba(212,175,55,0.3)] active:scale-95 transition-all shrink-0">
-                  <ShoppingBag className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" /> <span className="whitespace-nowrap tracking-wide">{tLang.addToCart}</span>
-                </button>
+                hasTable ? (
+                  <button onClick={(e) => { addToCart(selectedDish, '', e); setSelectedDish(null); }} className="px-6 sm:px-8 py-3.5 sm:py-4 rounded-xl sm:rounded-2xl bg-gradient-to-r from-[#E8C972] to-[#B5952F] text-stone-950 font-extrabold text-xs sm:text-sm flex items-center gap-2 shadow-[0_8px_20px_rgba(212,175,55,0.3)] active:scale-95 transition-all shrink-0">
+                    <ShoppingBag className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" /> <span className="whitespace-nowrap tracking-wide">{tLang.addToCart}</span>
+                  </button>
+                ) : null
               ) : (
                 <span className="text-[10px] sm:text-xs font-bold text-rose-300 bg-rose-950/50 border border-rose-800/60 px-4 py-2 rounded-xl shrink-0 uppercase tracking-wider">{tLang.inStopList}</span>
               )}
@@ -1112,7 +1128,7 @@ export default function App() {
       )}
 
       {/* Smart Bottom Bar-Transformer (Full Width Dock) */}
-      {!isCartOpen && (
+      {!isCartOpen && hasTable && (
         <div className="fixed bottom-0 left-0 right-0 z-40 bg-[#141311]/95 backdrop-blur-2xl border-t border-[#D4AF37]/25 shadow-[0_-10px_30px_rgba(0,0,0,0.8)] pt-2.5 sm:pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] px-3 sm:px-6 transition-all animate-fade-up">
           <div className="w-full max-w-md mx-auto flex items-center gap-2">
             {cartItemCount === 0 ? (
