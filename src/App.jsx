@@ -193,26 +193,34 @@ const detectUserLanguage = () => {
     const urlParams = new URLSearchParams(window.location.search);
     const urlLang = urlParams.get('lang')?.toLowerCase();
     if (urlLang && ['am', 'ru', 'en'].includes(urlLang)) {
-      localStorage.setItem('ech_lang', urlLang);
       return urlLang;
     }
 
-    const saved = localStorage.getItem('ech_lang');
+    const saved = localStorage.getItem('ech_selected_lang');
     if (saved && ['am', 'ru', 'en'].includes(saved)) {
       return saved;
     }
 
-    const browserLangs = navigator.languages || [navigator.language || ''];
+    const browserLangs = (navigator.languages && navigator.languages.length > 0)
+      ? navigator.languages
+      : [navigator.language || navigator.userLanguage || ''];
+
     for (const l of browserLangs) {
       if (!l) continue;
       const code = l.toLowerCase();
-      if (code.startsWith('hy') || code.startsWith('am')) return 'am';
-      if (code.startsWith('ru') || code.startsWith('be') || code.startsWith('uk') || code.startsWith('kk')) return 'ru';
-      if (code.startsWith('en')) return 'en';
+      if (code.startsWith('ru') || code.startsWith('be') || code.startsWith('uk') || code.startsWith('kk')) {
+        return 'ru';
+      }
+      if (code.startsWith('hy')) {
+        return 'am';
+      }
+      if (code.startsWith('en')) {
+        return 'en';
+      }
     }
     return 'en';
   } catch (e) {
-    return 'am';
+    return 'ru';
   }
 };
 
@@ -221,7 +229,7 @@ export default function App() {
   const handleLangChange = (l) => {
     setLang(l);
     try {
-      localStorage.setItem('ech_lang', l);
+      localStorage.setItem('ech_selected_lang', l);
     } catch (e) {}
   };
   const tLang = translations[lang];
