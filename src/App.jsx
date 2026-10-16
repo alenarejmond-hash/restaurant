@@ -133,28 +133,7 @@ const translations = {
   }
 };
 
-const DEFAULT_MENU_ITEMS = [
-  {
-    id: 'ech-1',
-    category: { am: 'Տաք ուտեստներ', ru: 'Горячие блюда', en: 'Hot Dishes' },
-    name: { am: 'Էջմիածնի Քյուֆթա', ru: 'Эчмиадзинская Кюфта', en: 'Echmiadzin Kyufta' },
-    description: {
-      am: 'Ավանդական հորթի միս հարած կարագով և կոնյակի բույրով:',
-      ru: 'Аутентичная отбивная телятина со взбитым сливочным маслом и коньячным ароматом.',
-      en: 'Authentic beaten veal with whipped butter and a hint of cognac.'
-    },
-    ingredients: {
-      am: 'Հորթի միս, կարագ, կոնյակ, համեմունքներ',
-      ru: 'Телятина, сливочное масло, коньяк, специи',
-      en: 'Veal, butter, cognac, spices'
-    },
-    price: 4800,
-    image: 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=800&q=80',
-    available: true,
-    tags: ['⭐ Top'],
-    prepTime: '25-30 мин', calories: '620 ккал', weight: '380 г'
-  }
-];
+const DEFAULT_MENU_ITEMS = [];
 
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbz9XPBPRsA0X_G_HvcLqhRS-O7Kf629DHua0zwRh1Vflyz89fnIcgkI4C7hpCvCBQnM0Q/exec';
 const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTtxWJ3HBCWPwD6YdWaGKEbHuXHKwnXbIX6GiZ7qRu_RYBhaRNNibbJuyLIRfilIfvF0CMZXB5jghnW/pub?output=csv';
@@ -234,8 +213,30 @@ export default function App() {
   };
   const tLang = translations[lang];
 
-  const [menuItems, setMenuItems] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [menuItems, setMenuItems] = useState(() => {
+    try {
+      const cached = localStorage.getItem('ech_cached_menu');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const realItems = parsed.filter(item => item && item.image && !item.image.includes('unsplash.com') && item.id !== 'ech-1');
+          if (realItems.length > 0) return realItems;
+        }
+      }
+    } catch (e) {}
+    return [];
+  });
+  const [isLoading, setIsLoading] = useState(() => {
+    try {
+      const cached = localStorage.getItem('ech_cached_menu');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        const realItems = parsed.filter(item => item && item.image && !item.image.includes('unsplash.com') && item.id !== 'ech-1');
+        if (realItems.length > 0) return false;
+      }
+    } catch (e) {}
+    return true;
+  });
   const [activeCategoryId, setActiveCategoryId] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDish, setSelectedDish] = useState(null);
@@ -243,7 +244,13 @@ export default function App() {
   const [tableNumber, setTableNumber] = useState('1');
   const [showTablePicker, setShowTablePicker] = useState(false);
 
-  const [cart, setCart] = useState({});
+  const [cart, setCart] = useState(() => {
+    try {
+      const saved = localStorage.getItem('ech_guest_cart');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return {};
+  });
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
@@ -381,9 +388,31 @@ export default function App() {
       }
     } catch (e) { console.warn('URL parsing fallback:', e); }
 
+    try {
+      const cached = localStorage.getItem('ech_cached_menu');
+      if (cached && (cached.includes('unsplash.com') || cached.includes('ech-1'))) {
+        localStorage.removeItem('ech_cached_menu');
+      }
+    } catch (e) {}
+
+    const preloadImages = (items) => {
+      if (typeof window === 'undefined' || !Array.isArray(items)) return;
+      try {
+        items.forEach(dish => {
+          if (dish && dish.image && typeof dish.image === 'string' && (dish.image.startsWith('http') || dish.image.startsWith('./') || dish.image.startsWith('/'))) {
+            const img = new Image();
+            img.src = dish.image;
+          }
+        });
+      } catch (e) {}
+    };
+
     const fetchMenuData = async () => {
       try {
-        const res = await fetch(CSV_URL);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4500);
+        const res = await fetch(CSV_URL, { signal: controller.signal });
+        clearTimeout(timeoutId);
         const text = await res.text();
         const parsed = parseCSV(text);
         
@@ -449,16 +478,25 @@ export default function App() {
               weight: clean(row[getIdx('порция')])
             });
           }
-          setMenuItems(fetchedItems.length > 0 ? fetchedItems : DEFAULT_MENU_ITEMS);
+          if (fetchedItems.length > 0) {
+            setMenuItems(fetchedItems);
+            try {
+              localStorage.setItem('ech_cached_menu', JSON.stringify(fetchedItems));
+            } catch (err) {
+              console.warn('Storage quota error:', err);
+            }
+            preloadImages(fetchedItems);
+          }
         }
       } catch (e) {
-        console.error('Failed to fetch menu:', e);
-        setMenuItems(DEFAULT_MENU_ITEMS); 
+        console.warn('Network offline or slow, running smoothly from local cache:', e);
+        setMenuItems(prev => (prev && prev.length > 0 ? prev : DEFAULT_MENU_ITEMS));
       } finally {
         setIsLoading(false);
       }
     };
     
+    preloadImages(menuItems);
     fetchMenuData();
 
     return () => {
@@ -616,11 +654,22 @@ export default function App() {
   const clearCart = () => {
     triggerHaptic('heavy');
     setCart({});
+    try { localStorage.removeItem('ech_guest_cart'); } catch (e) {}
   };
   
   const cartList = useMemo(() => Object.values(cart), [cart]);
   const cartItemCount = useMemo(() => cartList.reduce((sum, i) => sum + i.quantity, 0), [cartList]);
   const cartSubtotal = useMemo(() => cartList.reduce((sum, i) => sum + i.price * i.quantity, 0), [cartList]);
+
+  useEffect(() => {
+    try {
+      if (Object.keys(cart).length > 0) {
+        localStorage.setItem('ech_guest_cart', JSON.stringify(cart));
+      } else {
+        localStorage.removeItem('ech_guest_cart');
+      }
+    } catch (e) {}
+  }, [cart]);
 
   useEffect(() => {
     if (cartItemCount > 0 && flyingParticles.length === 0) {
