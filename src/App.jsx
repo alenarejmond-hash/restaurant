@@ -188,8 +188,42 @@ function parseCSV(str) {
   return arr;
 }
 
+const detectUserLanguage = () => {
+  try {
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlLang = urlParams.get('lang')?.toLowerCase();
+    if (urlLang && ['am', 'ru', 'en'].includes(urlLang)) {
+      localStorage.setItem('ech_lang', urlLang);
+      return urlLang;
+    }
+
+    const saved = localStorage.getItem('ech_lang');
+    if (saved && ['am', 'ru', 'en'].includes(saved)) {
+      return saved;
+    }
+
+    const browserLangs = navigator.languages || [navigator.language || ''];
+    for (const l of browserLangs) {
+      if (!l) continue;
+      const code = l.toLowerCase();
+      if (code.startsWith('hy') || code.startsWith('am')) return 'am';
+      if (code.startsWith('ru') || code.startsWith('be') || code.startsWith('uk') || code.startsWith('kk')) return 'ru';
+      if (code.startsWith('en')) return 'en';
+    }
+    return 'en';
+  } catch (e) {
+    return 'am';
+  }
+};
+
 export default function App() {
-  const [lang, setLang] = useState('am'); 
+  const [lang, setLang] = useState(detectUserLanguage); 
+  const handleLangChange = (l) => {
+    setLang(l);
+    try {
+      localStorage.setItem('ech_lang', l);
+    } catch (e) {}
+  };
   const tLang = translations[lang];
 
   const [menuItems, setMenuItems] = useState([]);
@@ -653,7 +687,7 @@ export default function App() {
             <div className="flex bg-white/5 rounded-full p-1 border border-white/10 shrink-0 shadow-inner">
               {['am', 'ru', 'en'].map(l => (
                 <button
-                  key={l} onClick={() => setLang(l)}
+                  key={l} onClick={() => handleLangChange(l)}
                   className={`text-[10px] sm:text-[11px] font-bold px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-full transition-all duration-300 ${lang === l ? 'bg-[#D4AF37] text-stone-950 shadow-md scale-105' : 'text-stone-400 hover:text-white hover:bg-white/5'}`}
                 >
                   {l.toUpperCase()}
