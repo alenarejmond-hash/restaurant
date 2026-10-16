@@ -698,7 +698,7 @@ export default function App() {
                   key={l} onClick={() => handleLangChange(l)}
                   className={`text-[10px] sm:text-[11px] font-bold px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-full transition-all duration-300 ${lang === l ? 'bg-[#D4AF37] text-stone-950 shadow-md scale-105' : 'text-stone-400 hover:text-white hover:bg-white/5'}`}
                 >
-                  {l.toUpperCase()}
+                  {l === 'am' ? 'HY' : l.toUpperCase()}
                 </button>
               ))}
             </div>
