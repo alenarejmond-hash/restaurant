@@ -136,7 +136,7 @@ const translations = {
 const DEFAULT_MENU_ITEMS = [];
 
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbz9XPBPRsA0X_G_HvcLqhRS-O7Kf629DHua0zwRh1Vflyz89fnIcgkI4C7hpCvCBQnM0Q/exec';
-const CSV_URL = 'https://menu-cache.alenarejmond.workers.dev/';
+const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTtxWJ3HBCWPwD6YdWaGKEbHuXHKwnXbIX6GiZ7qRu_RYBhaRNNibbJuyLIRfilIfvF0CMZXB5jghnW/pub?output=csv';
 
 const formatImageUrl = (url) => {
   if (!url) return '';
